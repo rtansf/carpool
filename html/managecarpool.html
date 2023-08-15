@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Basic Bootstrap Template</title>
+    
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.4/jquery.min.js"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.0/jquery-ui.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.12.9/dist/umd/popper.min.js" integrity="sha384-ApNbgh9B+Y1QKtv3Rn7W3mgPxhU9K/ScQsAP7hUibX39j7fakFPskvXusvfa0b4Q" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.0.0/dist/js/bootstrap.min.js" integrity="sha384-JZR6Spejh4U02d8jOt6vLEHfe/JQGiRRSQQxSfFWpi1MquVdAyjUar5+76PVCmYl" crossorigin="anonymous"></script>
+
+<!-- Bootstrap CSS file -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-EVSTQN3/azprG1Anm3QDgpJLIm9Nao0Yz1ztcQTwFspd3yD65VohhpuuCOmLASjC" crossorigin="anonymous">
+</head>
+<style>
+body {
+  //text-align: center;
+  //text-transform: uppercase;
+  //padding: 50px 0;
+}
+
+.box {
+  display: flex;
+  //align-items: center;
+  //justify-content: center;
+  background: gray;
+  margin: 20px 0;
+  padding: 10px;
+  width: 100%;
+  min-height: 300px;
+  border: 1px blue solid;
+  color: #fff;
+}
+.passanger {
+    float: none;
+}
+.noshow {
+    display: none;
+}
+.wholefoods {
+    font-size: 18px;
+    color: blue;
+}
+.rockridge {
+    font-size: 18px;
+    color: red;
+}
+.driver-label {
+    font-size: 18px;
+    color: lightblue;
+}
+</style>
+<script>
+  var currentLocations;
+  var riderDriverMap = {};
+  var driverAssignmentMap = {};
+  var hikerMap = {};
+  
+  $(document).ready(function() {
+
+      // Get saved rideassigments
+      $.get( "http://localhost:8080/rideassignments", function( data ) {
+          showRideAssignments(data);
+      });
+      
+      // Bind Print button
+      $("#print").click(function() {
+          alert ("Coming soon!");
+      });	  
+
+      // Bind Reset button
+      $("#reset").click(function() {
+          performInitialRideAssignments();
+      });	  
+  });
+
+  function showRideAssignments(data) {
+      var locations = data.data;
+      var wfoods = locations[0];
+      var rridge = locations[1];
+      var assignments = wfoods.rideAssignments;
+      var orphans = wfoods.orphanRiders;
+      
+      if (!orphans || orphans.length == 0) {
+	  $("#orphanBox").remove();
+      }
+      
+      if (!assignments) {
+	  return;
+      }
+      
+      // Stash locations
+      currentLocations = locations;
+      
+      for (i = 0; i < assignments.length; i++) {
+	  var assignment = assignments[i];
+	  var rideGiver = assignment.rideGiver;
+	  console.log ("Giver:", rideGiver.firstName, rideGiver.lastName, rideGiver.email, rideGiver.phone);
+	  hikerMap[rideGiver.phone] = rideGiver;
+	  driverAssignmentMap[rideGiver.phone] = assignment;
+          var driverBox = $("#driverbox").eq(0).html();
+	  driverBox = driverBox.replaceAll("xxx", rideGiver.phone);
+	  rideGiverInfo = rideGiver.firstName + " " + rideGiver.lastName + ", " + rideGiver.email + ", " + rideGiver.phone + ", " +
+	      rideGiver.numPassangers;
+	  driverBox = driverBox.replaceAll("yyy", rideGiverInfo);
+          $("#wholefoodsdrivers").append(driverBox);
+          $rider = $("#wholefoodsdrivers").find("#"+rideGiver.phone);
+	  
+	  var rideGetters = assignment.rideGetters;
+	  for (j = 0; j < rideGetters.length; j++) {
+	      rideGetter = rideGetters[j];
+   	      console.log ("Getter:", rideGetter.firstName, rideGetter.lastName, rideGetter.email, rideGetter.phone);
+    	      hikerMap[rideGetter.phone] = rideGetter;
+	      riderDriverMap[rideGetter.phone] = rideGiver.phone;
+	      riderInfo = rideGetter.firstName + " " + rideGetter.lastName + ", " + rideGetter.email + ", " + rideGetter.phone;
+	      riderHtml = '<div class="passanger" id="xxx">' + riderInfo + '</div>';
+	      riderHtml = riderHtml.replaceAll("xxx", rideGetter.phone);
+	      $rider.append(riderHtml);
+	  }
+      }
+      $(".passanger").draggable({
+      });
+      
+      $(".driver").droppable({
+	  drop: handleDropEvent
+      });
+  }
+
+  function saveRideAssignments() {
+      var dataJson = JSON.stringify(currentLocations);
+      $.ajax({
+          type: "POST",
+          url: "http://localhost:8080/rideassignments",
+          data: dataJson,
+          success: refreshPage()
+      });
+  }
+
+  function refreshPage() {
+      location.reload(true);
+  }
+  
+  function performInitialRideAssignments() {
+      $.get( "http://localhost:8080/initialrideassignments", function( data ) {
+          refreshPage();
+      });
+  }
+  
+  function handleDropEvent( event, ui ) {
+      var draggable = ui.draggable;
+      console.log( 'The passanger ' + draggable.attr("id") + ' was dropped onto me! ' + $(this).attr("id"));
+      var rider = draggable.attr("id");
+      var toDriver = $(this).attr("id");
+      var toHiker = hikerMap[toDriver];
+      var fromDriver = riderDriverMap[rider];
+
+      var wfoods = currentLocations[0];
+      var assignments = wfoods.rideAssignments;
+
+      // Make sure toDriver's max passangers is not reached
+      var toAssignment = driverAssignmentMap[toDriver];
+      var toRideGetters = toAssignment.rideGetters;
+      if (toRideGetters.length < toHiker.numPassangers) { 
+	  
+	  // Remove the rider from the from list
+	  var fromAssignment = driverAssignmentMap[fromDriver];
+	  fromAssignment.rideGetters = fromAssignment.rideGetters.filter(item => item.phone !== rider);
+
+	  // Add the rider to the to list
+	  var hiker = hikerMap[rider];
+	  toRideGetters.push(hiker);
+
+	  // Save
+          saveRideAssignments();
+      } else {
+	  var toDriverName = toHiker.firstName + " " + toHiker.lastName;
+          alert ("Sorry, " + toDriverName + "'s car is already full");
+          refreshPage();
+      }
+      
+  }
+
+</script>
+<body>
+<div class="container">  
+
+<h2>Manage Carpool</h2>
+<h3>Mt Tam Hike, Aug 19, 2023</h3>  
+<br/>
+
+<div class="container" id="wholefoods">
+  <div class="row">
+     <div class="location wholefoods"> Location: Whole Foods, Market/Dolores </div>
+  </div>
+  <div class="row" id="wholefoodsdrivers">
+  </div><!-- wholefoods drivers -->
+
+  <div class="col-xs-12 col-sm-6" id="orphanBox">
+      <div class="box">
+           <div class="orphans">
+	     <p>Riders not assigned (because there are not enough drivers):</p>
+	     <div class="orphan">John Smith, jsmith@gmail.com, 5102349332</div>
+	   </div>
+      </div>
+  </div>
+
+
+</div><!-- whole foods -->
+
+<div class="container noshow" id="rockridge">
+  <div class="row">
+     <div class="location rockridge"> Location: Rockridge BART </div>
+  </div>
+  <div class="row" id="rockridgedrivers">
+  </div><!-- rockridge drivers -->
+
+  <div class="col-xs-12 col-sm-6" id="orphanBox">
+      <div class="box">
+           <div class="orphans">
+	     <p>Riders not assigned (because there are not enough drivers):</p>
+	     <div class="orphan">John Smith, jsmith@gmail.com, 5102349332</div>
+	   </div>
+      </div>
+  </div>
+
+</div><!-- rockridge -->
+
+<div class="btn-group" role="group" aria-label="Basic example">
+   <button type="button" class="btn btn-primary" id="print">Print</button>
+   <button type="button" class="btn btn-primary" id="reset">Reset</button>
+</div>
+
+</div><!-- top -->
+
+<template id="driverbox">
+    <div class="col-xs-12 col-sm-6">
+      <div class="box">
+           <div class="driver" id="xxx">
+   	     <p class="driver-label">Driver: yyy</p>
+	     <p>Passengers:</p>
+	   </div>
+      </div>
+    </div>
+</template>  
+
+<!-- Bootstrap JS file Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-MrcW6ZMFYlzcLA8Nl+NtUVF0sA7MsXsP1UyJoMp4YLEuNSfAP+JcXn/tWtIaxVXM" crossorigin="anonymous"></script>
+
+</body>
+</html>
